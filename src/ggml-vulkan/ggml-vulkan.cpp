@@ -15242,6 +15242,13 @@ static ggml_backend_t ggml_backend_vk_device_init(ggml_backend_dev_t dev, const 
 }
 
 static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggml_tensor * op) {
+    // These operations do not dispatch a shader or bind a storage buffer, so the
+    // device's storage-buffer addressing limits do not apply to them.
+    if (op->op == GGML_OP_NONE || op->op == GGML_OP_RESHAPE || op->op == GGML_OP_VIEW ||
+        op->op == GGML_OP_PERMUTE || op->op == GGML_OP_TRANSPOSE) {
+        return true;
+    }
+
     ggml_backend_vk_device_context * ctx = (ggml_backend_vk_device_context *)dev->context;
     const vk_device& device = ggml_vk_get_device(ctx->device);
 
