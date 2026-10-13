@@ -13,6 +13,13 @@ extern void * const vk_ptr_base;
 extern vk_instance_t vk_instance;
 extern ggml_backend_buffer_i ggml_backend_vk_buffer_interface;
 
+#ifdef GGML_VULKAN_CHECK_RESULTS
+extern size_t vk_skip_checks;
+extern size_t vk_output_tensor;
+void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, int tensor_idx);
+void ggml_vk_check_results_1(ggml_backend_vk_context * ctx, ggml_cgraph * cgraph, int tensor_idx);
+#endif
+
 // instance
 vk_device ggml_vk_get_device(size_t idx);
 DispatchLoaderDynamic & ggml_vk_default_dispatcher();
