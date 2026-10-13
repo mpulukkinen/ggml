@@ -15335,6 +15335,13 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                     return op->op == GGML_OP_MUL_MAT &&
                            ggml_vk_can_use_mul_mat_i8_tensorwise(device, op);
                 }
+                // Qualcomm's proprietary Adreno driver produces incorrect Q8_0
+                // matmul results for both the integer-dot and dequant paths.
+                // Let the scheduler use its CPU fallback for these few weights.
+                if (device->driver_id == vk::DriverId::eQualcommProprietary &&
+                    src0_type == GGML_TYPE_Q8_0) {
+                    return false;
+                }
                 if (op->op == GGML_OP_MUL_MAT_ID) {
                     if (!device->mul_mat_id_s[src0_type] && !device->mul_mat_id_m[src0_type] && !device->mul_mat_id_l[src0_type]) {
                         // If there's not enough shared memory for row_ids and the result tile, fallback to CPU
