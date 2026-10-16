@@ -7212,11 +7212,14 @@ void ggml_vk_mul_mat(ggml_backend_vk_context * ctx, vk_context& subctx, const st
     // where the M dimension is very large.
     // Split_k doesn't work with M splitting.
     // This only supports batchsize == 1.
-    const size_t nbytes = ggml_nbytes(src0);
+    const bool f32_dequant = ctx->device->driver_id == vk::DriverId::eQualcommProprietary &&
+                             src0->type == GGML_TYPE_Q8_0;
+    const size_t row_size = f32_dequant ? src0->ne[0] * sizeof(float) : src0->nb[1];
+    const size_t nbytes = f32_dequant ? row_size * src0->ne[1] : ggml_nbytes(src0);
     const bool needs_split = dst->ne[2] == 1 && dst->ne[3] == 1 && nbytes > ctx->device->properties.limits.maxStorageBufferRange;
     if (needs_split) {
         // Choose the number of rows that can fit (and divide by two, to allow for any additional offsets)
-        const uint32_t M_split = ctx->device->properties.limits.maxStorageBufferRange / (2 * src0->nb[1]);
+        const uint32_t M_split = ctx->device->properties.limits.maxStorageBufferRange / (2 * row_size);
         uint32_t m_offset = 0;
         while (m_offset < dst->ne[0]) {
             const uint32_t cur_M_size = std::min(M_split, (uint32_t)(dst->ne[0] - m_offset));
