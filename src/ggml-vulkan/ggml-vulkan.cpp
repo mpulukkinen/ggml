@@ -6174,7 +6174,10 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
 
     const bool y_f32_kernel = src1->type == GGML_TYPE_F32 && !y_non_contig;
 
-    bool quantize_y = ctx->device->integer_dot_product && src1->type == GGML_TYPE_F32 && ggml_is_contiguous(src1) && !y_non_contig && (ne11 * ne10) % 4 == 0;
+    // Qualcomm's Q8 matmul kernels are numerically invalid; use the regular F16 matmul after dequantization.
+    const bool force_dequant_q8 = ctx->device->driver_id == vk::DriverId::eQualcommProprietary &&
+                                  src0->type == GGML_TYPE_Q8_0;
+    bool quantize_y = !force_dequant_q8 && ctx->device->integer_dot_product && src1->type == GGML_TYPE_F32 && ggml_is_contiguous(src1) && !y_non_contig && (ne11 * ne10) % 4 == 0;
 
     // Check for mmq first
     const std::vector<vk_matmul_pipeline_pair>* mmp_map = quantize_y ? ggml_vk_get_mul_mat_mat_pipeline_map(ctx, src0->type, GGML_TYPE_Q8_1, (ggml_prec)dst->op_params[0]) : nullptr;
@@ -6185,7 +6188,7 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context& sub
         quantize_y = false;
     }
 
-    const bool qx_needs_dequant = mmp_map == nullptr || x_non_contig;
+    const bool qx_needs_dequant = force_dequant_q8 || mmp_map == nullptr || x_non_contig;
     const bool qy_needs_dequant = !quantize_y && ((src1->type != f16_type && !y_f32_kernel) || y_non_contig);
 
     if (qx_needs_dequant) {
@@ -15335,13 +15338,6 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                     return op->op == GGML_OP_MUL_MAT &&
                            ggml_vk_can_use_mul_mat_i8_tensorwise(device, op);
                 }
-                // Qualcomm's proprietary Adreno driver produces incorrect Q8_0
-                // matmul results for both the integer-dot and dequant paths.
-                // Let the scheduler use its CPU fallback for these few weights.
-                if (device->driver_id == vk::DriverId::eQualcommProprietary &&
-                    src0_type == GGML_TYPE_Q8_0) {
-                    return false;
-                }
                 if (op->op == GGML_OP_MUL_MAT_ID) {
                     if (!device->mul_mat_id_s[src0_type] && !device->mul_mat_id_m[src0_type] && !device->mul_mat_id_l[src0_type]) {
                         // If there's not enough shared memory for row_ids and the result tile, fallback to CPU
@@ -15615,10 +15611,6 @@ static bool ggml_backend_vk_device_supports_op(ggml_backend_dev_t dev, const ggm
                    (op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == GGML_TYPE_F16) &&
                    (op->type == GGML_TYPE_F32 || op->type == GGML_TYPE_F16);
         case GGML_OP_MUL:
-            if (device->driver_id == vk::DriverId::eQualcommProprietary &&
-                op->src[0]->op == GGML_OP_RMS_NORM) {
-                return false;
-            }
             return (op->src[0]->type == GGML_TYPE_F32 || op->src[0]->type == GGML_TYPE_F16) &&
                    (op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == GGML_TYPE_F16) &&
                    (op->type == GGML_TYPE_F32 || op->type == GGML_TYPE_F16);
