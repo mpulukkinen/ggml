@@ -8458,7 +8458,15 @@ inline bool use_adreno_kernels(const ggml_backend_opencl_context *backend_ctx, c
     } else if (tensor->type == GGML_TYPE_Q8_0) {
         type_env = getenv("GGML_OPENCL_ADRENO_Q8_0");
     }
-    if (type_env != nullptr && type_env[0] == '0') {
+    if (type_env != nullptr) {
+        if (type_env[0] == '0') {
+            return false;
+        }
+    } else if (backend_ctx->adreno_gen == ADRENO_GPU_GEN::X1E &&
+               backend_ctx->adreno_cl_compiler_version.type == ADRENO_CL_COMPILER_TYPE::DX &&
+               (tensor->type == GGML_TYPE_Q4_0 || tensor->type == GGML_TYPE_Q8_0)) {
+        // The X1 DX compiler path produces invalid diffusion output when either quantized path
+        // is mixed with its generic counterpart. Keep both generic unless explicitly enabled.
         return false;
     }
 
