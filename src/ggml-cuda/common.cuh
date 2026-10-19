@@ -52,6 +52,7 @@
 #define GGML_CUDA_CC_VOLTA           700
 #define GGML_CUDA_CC_TURING          750
 #define GGML_CUDA_CC_AMPERE          800
+#define GGML_CUDA_CC_AMPERE_GA10X    860
 #define GGML_CUDA_CC_ORIN            870
 #define GGML_CUDA_CC_ADA_LOVELACE    890
 #define GGML_CUDA_CC_HOPPER          900
@@ -111,9 +112,9 @@
 #define GGML_CUDA_CC_IS_QY2(cc)      (cc >= GGML_CUDA_CC_QY2 && cc < GGML_CUDA_CC_PH1)
 #define GGML_CUDA_CC_IS_PH1(cc)      (cc >= GGML_CUDA_CC_PH1)
 
-#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && CUDART_VERSION >= 11070
+#if !defined(GGML_USE_HIP) && (defined(GGML_USE_MUSA) || CUDART_VERSION >= 11070)
 #    define GGML_CUDA_USE_CUB
-#endif  // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && CUDART_VERSION >= 11070
+#endif  // !defined(GGML_USE_HIP) && (defined(GGML_USE_MUSA) || CUDART_VERSION >= 11070)
 
 // PDL host-side support (cudaLaunchKernelEx) requires CUDART >= 11.8.
 // However, this has been bugged in CTK < 12.3 for MSVC builds, see
@@ -131,15 +132,15 @@ static __device__ __forceinline__ void ggml_cuda_syncwarp() {
 }
 
 static __device__ __forceinline__ void ggml_cuda_pdl_sync() {
-#if defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
+#if defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
     cudaGridDependencySynchronize();
-#endif // defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
+#endif // defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
 }
 
 static __device__ __forceinline__ void ggml_cuda_pdl_lc() {
-#if defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
+#if defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
     cudaTriggerProgrammaticLaunchCompletion();
-#endif // defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
+#endif // defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
 }
 
 #ifdef __CUDA_ARCH_LIST__
@@ -237,7 +238,7 @@ static const char * cu_get_error_str(CUresult err) {
 #define CU_CHECK(err) CUDA_CHECK_GEN(err, CUDA_SUCCESS, cu_get_error_str)
 #endif
 
-#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+#if !defined(GGML_USE_HIP)
 #    define CUDA_SET_SHARED_MEMORY_LIMIT(kernel, nbytes)                                                       \
         do {                                                                                                   \
             static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = { false };                         \
@@ -252,7 +253,7 @@ static const char * cu_get_error_str(CUresult err) {
         do {                                             \
             GGML_UNUSED(nbytes);                         \
         } while (0)
-#endif // !(defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+#endif // !defined(GGML_USE_HIP)
 
 #if CUDART_VERSION >= 11010 || defined(GGML_USE_MUSA)
 #define GGML_CUDA_ASSUME(x) __builtin_assume(x)
@@ -285,21 +286,21 @@ static const char * cu_get_error_str(CUresult err) {
 #define VOLTA_MMA_AVAILABLE
 #endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ == GGML_CUDA_CC_VOLTA
 
-#if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_TURING
+#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_TURING
 #define TURING_MMA_AVAILABLE
-#endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_TURING
+#endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_TURING
 
-#if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
 #define AMPERE_MMA_AVAILABLE
-#endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
 
 #if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_BLACKWELL && __CUDA_ARCH__ < GGML_CUDA_CC_RUBIN
 #    define BLACKWELL_MMA_AVAILABLE
 #endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_BLACKWELL
 
-#if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
 #define CP_ASYNC_AVAILABLE
-#endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
 
 #if !defined(GGML_CUDA_NO_FA) && !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ < 220)
 #define FLASH_ATTN_AVAILABLE
@@ -378,6 +379,15 @@ static bool blackwell_mma_available(const int cc) {
            ggml_cuda_highest_compiled_arch(cc) < GGML_CUDA_CC_RUBIN;
 }
 
+// INT8 convrot MUL_MAT rides the legacy cuBLAS/hipBLAS i8xi8 -> i32 GEMM
+// (see ggml_cuda_mul_mat_i8). Do not widen this set without correctness
+// evidence for the BLAS route on the target architecture.
+static bool ggml_cuda_i8_blas_available(const int cc) {
+    return turing_mma_available(cc) || GGML_CUDA_CC_IS_CDNA(cc) ||
+           GGML_CUDA_CC_IS_RDNA2(cc) || GGML_CUDA_CC_IS_RDNA3(cc) ||
+           GGML_CUDA_CC_IS_RDNA4(cc);
+}
+
 // Checks whether the tensor's base data pointer and higher-dimensional strides are byte-aligned to `alignment` bytes.
 static bool ggml_cuda_is_aligned(const ggml_tensor * tensor, const size_t alignment) {
     GGML_ASSERT(tensor != nullptr);
@@ -397,7 +407,7 @@ static constexpr __device__ int ggml_cuda_get_physical_warp_size() {
 
 // Maximum number of bytes that can be copied in a single instruction.
 static constexpr __device__ int ggml_cuda_get_max_cpy_bytes() {
-#ifdef GGML_USE_HIP
+#if defined(GGML_USE_HIP) || defined(GGML_USE_MUSA)
     return 16;
 #else
 #if __CUDA_ARCH__ >= GGML_CUDA_CC_VOLTA
@@ -405,7 +415,7 @@ static constexpr __device__ int ggml_cuda_get_max_cpy_bytes() {
 #else
     return 8;
 #endif // __CUDA_ARCH__ >= GGML_CUDA_CC_VOLTA
-#endif // GGML_USE_HIP
+#endif // defined(GGML_USE_HIP) || defined(GGML_USE_MUSA)
 }
 
 
@@ -424,10 +434,6 @@ static __device__ void no_device_code(
     __trap();
 
     GGML_UNUSED(no_device_code); // suppress unused function warning
-
-#if defined(GGML_USE_MUSA)
-    __builtin_unreachable();
-#endif // defined(GGML_USE_MUSA)
 }
 
 #ifdef __CUDA_ARCH__
@@ -457,7 +463,7 @@ struct ggml_cuda_unroll<1> {
 
 template<int width = WARP_SIZE>
 static __device__ __forceinline__ int warp_reduce_sum(int x) {
-#if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
     return __reduce_add_sync(0xffffffff, x);
 #else
 #pragma unroll
@@ -465,7 +471,7 @@ static __device__ __forceinline__ int warp_reduce_sum(int x) {
         x += __shfl_xor_sync(0xffffffff, x, offset, width);
     }
     return x;
-#endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
+#endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA) && __CUDA_ARCH__ >= GGML_CUDA_CC_AMPERE
 }
 
 template<int width = WARP_SIZE>
@@ -696,16 +702,11 @@ static __device__ __forceinline__ half2 ggml_cuda_hmax2(const half2 a, const hal
 
 template<int width = WARP_SIZE>
 static __device__ __forceinline__ half2 warp_reduce_max(half2 x) {
-#if !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_PASCAL || defined(GGML_USE_HIP)
 #pragma unroll
    for (int offset = width/2; offset > 0; offset >>= 1) {
        x = ggml_cuda_hmax2(x, __shfl_xor_sync(0xffffffff, x, offset, width));
    }
    return x;
-#else
-   GGML_UNUSED(x);
-   NO_DEVICE_CODE;
-#endif // !defined(GGML_USE_HIP) && __CUDA_ARCH__ >= GGML_CUDA_CC_PASCAL || defined(GGML_USE_HIP)
 }
 
 #if (defined(CUDART_VERSION) && CUDART_VERSION < CUDART_HMASK) || defined(GGML_USE_HIP) || \
@@ -890,6 +891,7 @@ static __device__ __forceinline__ uint8_t ggml_cuda_fp32_to_ue4m3(float x) {
     const __nv_fp8_e4m3 xf(x);
     return xf.__x;
 #else
+     GGML_UNUSED(x);
      NO_DEVICE_CODE; // Used only for NVFP4 Scales for Activations, only for Blackwell
 #endif // defined(BLACKWELL_MMA_AVAILABLE)
 }
@@ -1457,10 +1459,10 @@ struct ggml_backend_cuda_context {
     std::string name;
     cudaEvent_t copy_event = nullptr;
 
-    cudaStream_t streams[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = { { nullptr } };
-    cublasHandle_t cublas_handles[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = {nullptr};
-    void * cublas_workspaces[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = {nullptr};
-    size_t cublas_workspace_sizes[GGML_CUDA_MAX_DEVICES] = {0};
+    cudaStream_t streams[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = {};
+    cublasHandle_t cublas_handles[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = {};
+    void * cublas_workspaces[GGML_CUDA_MAX_DEVICES][GGML_CUDA_MAX_STREAMS] = {};
+    size_t cublas_workspace_sizes[GGML_CUDA_MAX_DEVICES] = {};
 #ifdef GGML_CUDA_USE_CUBLASLT_FP8
     cublasLtHandle_t cublaslt_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
 #endif
@@ -1597,6 +1599,9 @@ struct ggml_cuda_mm_fusion_args_host {
     const ggml_tensor * gate_scale = nullptr;
     ggml_glu_op glu_op;
     float glu_limit = 0.0f;
+    const ggml_tensor * shared_up = nullptr;
+    const ggml_tensor * shared_gate = nullptr;
+    ggml_tensor * shared_dst = nullptr;
 };
 struct ggml_cuda_mm_fusion_args_device {
     const void * x_bias = nullptr;
@@ -1606,6 +1611,10 @@ struct ggml_cuda_mm_fusion_args_device {
     const void * gate_scale = nullptr;
     ggml_glu_op glu_op;
     float glu_limit = 0.0f;
+    const void * shared_up = nullptr;
+    const void * shared_gate = nullptr;
+    float * shared_dst = nullptr;
+    uint32_t shared_stride_col_dst = 0;
 };
 
 struct ggml_cuda_kernel_launch_params {
@@ -1706,11 +1715,11 @@ static bool ggml_cuda_kernel_can_use_pdl(const void * kernel) {
 #endif //defined(GGML_CUDA_USE_PDL)
 
 // PDL and __restrict__ need to be mutually exclusive, see https://github.com/ggml-org/llama.cpp/pull/24030
-# if (defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER)
+# if (defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER)
 # define GGML_CUDA_RESTRICT
 # else
 # define GGML_CUDA_RESTRICT __restrict__
-# endif // defined(GGML_CUDA_USE_PDL) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
+# endif // defined(GGML_CUDA_USE_PDL) && __CUDA_ARCH__ >= GGML_CUDA_CC_HOPPER
 
 template<typename Kernel, typename... Args>
 static __inline__ void ggml_cuda_kernel_launch(Kernel kernel, const ggml_cuda_kernel_launch_params & launch_params, Args&&... args) {

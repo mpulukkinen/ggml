@@ -606,6 +606,7 @@ extern "C" {
         GGML_OP_QUANTIZE_I8_CONVROT,
         GGML_OP_SAGE_ATTN,
         GGML_OP_SOL_ATTN,
+        GGML_OP_ROPE_APPLY,
 
         GGML_OP_COUNT,
     };
@@ -1517,6 +1518,11 @@ extern "C" {
             int                   group_size);
 
     // indirect matrix multiplication
+    //
+    // [TAG_MUL_MAT_ID_DUPLICATE_ID]
+    // note: this op has undefined behaviour if a given `a` is referenced more than once for a given `b`
+    //       (i.e. duplicate experts per token are not guaranteed to be supported in all backends)
+    // TODO: add backend support: https://github.com/ggml-org/llama.cpp/pull/29998#issuecomment-6153742533
     GGML_API struct ggml_tensor * ggml_mul_mat_id(
             struct ggml_context * ctx,
             struct ggml_tensor  * as,
@@ -1862,6 +1868,17 @@ extern "C" {
             struct ggml_tensor  * b,
             float                 scale,
             float                 max_bias);
+
+    // Apply precomputed rotary matrices, with shapes in ne[] order:
+    // a: F32 [head_dim, heads, tokens, batch], pe: F32 [2, 2, head_dim/2, tokens].
+    // pe stores [[cos, -sin], [sin, cos]] for each pair and token, shared across heads/batches.
+    // Returns contiguous F32 [head_dim, tokens, heads*batch]. Input strides are preserved.
+    // Interleaved pairs are (2*i, 2*i+1); otherwise pairs are (i, i+head_dim/2).
+    GGML_API struct ggml_tensor * ggml_rope_apply(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * pe,
+            bool                  interleaved);
 
     // rotary position embedding
     // if (mode & 1) - skip n_past elements (NOT SUPPORTED)
@@ -2694,6 +2711,7 @@ extern "C" {
     // the output packs the attention scores [S_v, H_v, n_tokens, n_seqs] followed by K state
     // snapshots, most-recent first (slot 0 = final state, slot s = state s tokens back). K == 1
     // keeps only the final state; when n_tokens < K only slots 0..n_tokens-1 are written.
+    // when n_tokens > K only slot 0 is guaranteed; backends may leave slots 1..K-1 unwritten.
     GGML_API struct ggml_tensor * ggml_gated_delta_net(
             struct ggml_context * ctx,
             struct ggml_tensor  * q,
