@@ -1540,7 +1540,13 @@ void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgra
                         }
                         split->inputs[n_inputs] = src;
                     }
-                    node->src[j] = tensor_id_copy(src_id, cur_backend_id, sched->cur_copy);
+                    struct ggml_tensor * src_copy = tensor_id_copy(src_id, cur_backend_id, sched->cur_copy);
+                    if (node->view_src == src) {
+                        // In-place ops alias their first source. If that source crosses a backend
+                        // boundary, the destination must alias the backend-local copy as well.
+                        node->view_src = src_copy;
+                    }
+                    node->src[j] = src_copy;
                 }
             }
         }
